@@ -1,3 +1,24 @@
+# System
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Data
+data/
+*.csv
+dataset_final_Sully.csv
+
+# Models & Artifacts
+# *.pkl (Tracking models as requested)
+# *.keras
+# *.h5
+# scaler.pkl
+
+# Project specific
 src/LoireSully_model/user_fortran
 src/LoireSully_model/BC_Loire_V2n1.cli
 src/LoireSully_model/courbe_tarage_NEW.txt
