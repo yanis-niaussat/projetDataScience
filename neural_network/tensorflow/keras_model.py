@@ -19,7 +19,7 @@ def main():
     set_seeds(42)
     
     # --- 1. CONFIGURATION ---
-    DATA_PATH = "../dataset_final_Sully.csv"
+    DATA_PATH = "../../dataset_final_Sully.csv"
     TARGETS = ['Parc_Chateau', 'Centre_Sully', 'Gare_Sully', 'Caserne_Pompiers']
     INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
     

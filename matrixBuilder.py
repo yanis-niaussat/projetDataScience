@@ -4,15 +4,15 @@ import re
 
 # --- CONFIGURATION ---
 data_folder = 'data'
-output_file = 'training_matrix_sully.csv'
+output_file = 'dataset_final_Sully.csv'
 
 # Coordonnées validées (Format : LIGNE R / X_Map, COLONNE R / Y_Map)
 # Basé sur ton analyse : Château (27, 50) correspond aux indices matriciels [27, 50]
 targets = {
-    'parc_chateau':     (27, 50),
-    'centre_sully':     (18, 42),
-    'gare_sully':       (16, 28),
-    'caserne_pompiers': (12, 11)
+    'Parc_Chateau':     (27, 50),
+    'Centre_Sully':     (18, 42),
+    'Gare_Sully':       (16, 28),
+    'Caserne_Pompiers': (12, 11)
 }
 
 # --- PROCESSING ---
