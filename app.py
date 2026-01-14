@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import os
 from pathlib import Path
 
 # --- CONFIGURATION ---
@@ -144,12 +145,24 @@ st.markdown("### Real-time Impact Assessment")
 tab1, tab2, tab3 = st.tabs(["🚀 Simulation & Map", "📈 Sensitivity Analysis", "🧠 Model Transparency"])
 
 # --- TAB 1: SIMULATION ---
+# --- TAB 1: SIMULATION ---
 with tab1:
+    # 1. KPI Metrics Row
     # 1. KPI Metrics Row
     cols = st.columns(4)
     map_data = []
     
+    map_data = []
+    
     for i, t in enumerate(targets):
+        level = preds[t]
+        name = t.replace("_", " ").title()
+        
+        # Color Logic
+        if level < 0.1: status, color = "Safe", "normal"
+        elif level < 1.0: status, color = "Warning", "off"
+        else: status, color = "CRITICAL", "inverse"
+
         level = preds[t]
         name = t.replace("_", " ").title()
         
@@ -192,6 +205,7 @@ with tab1:
         st.pyplot(fig)
 
 # --- TAB 2: SENSITIVITY (DYNAMICS) ---
+# --- TAB 2: SENSITIVITY (DYNAMICS) ---
 with tab2:
     st.subheader("📉 How does Flow Rate (Qmax) impact flooding?")
     st.write("This simulation holds all parameters constant (vegetation, topography) and only varies the River Flow.")
@@ -200,6 +214,9 @@ with tab2:
     q_range = np.linspace(3000, 12000, 50)
     sensitivity_data = []
     
+    # Repeat the current user input 50 times
+    temp_df = pd.concat([input_data]*50, ignore_index=True)
+    temp_df['qmax'] = q_range # Overwrite Qmax column
     # Repeat the current user input 50 times
     temp_df = pd.concat([input_data]*50, ignore_index=True)
     temp_df['qmax'] = q_range # Overwrite Qmax column

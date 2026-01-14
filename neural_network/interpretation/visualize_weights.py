@@ -8,7 +8,7 @@ import tensorflow as tf
 
 # --- CONFIGURATION ---
 # Adjust paths relative to this script location (neural_network/interpretation/)
-MODEL_DIR = "../tensorflow" 
+MODEL_DIR = "../tensorflow/keras" 
 INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
 TARGETS = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
 

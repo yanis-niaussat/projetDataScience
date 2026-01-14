@@ -19,7 +19,7 @@ def main():
     set_seeds(42)
     
     # --- 1. CONFIGURATION ---
-    DATA_PATH = "/home/yanis/Documents/projetDataScience/training_matrix_sully.csv"
+    DATA_PATH = "../../training_matrix_sully.csv"
     TARGETS = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
     INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
     
@@ -44,9 +44,13 @@ def main():
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
+    # Create directories
+    os.makedirs("keras", exist_ok=True)
+    os.makedirs("pkls", exist_ok=True)
+
     # Save Scaler for visualization
-    joblib.dump(scaler, "scaler.pkl")
-    print("Scaler saved to scaler.pkl")
+    joblib.dump(scaler, "pkls/scaler.pkl")
+    print("Scaler saved to pkls/scaler.pkl")
     
     # --- 4. MODELING LOOP ---
     results = {}
@@ -72,7 +76,7 @@ def main():
         # Early Stopping to prevent overfitting and mimic sklearn's automatic convergence check
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss', 
-            patience=20, 
+            patience=50, 
             restore_best_weights=True,
             verbose=0
         )
@@ -102,7 +106,15 @@ def main():
         }
         
         # Save model in Keras format
-        model.save(f"keras_model_{lieu}.keras")
+        model.save(f"keras/keras_model_{lieu}.keras")
+        # Save model in Pickle format
+        # Note: Pickling Keras models is experimental/complex. 
+        # We will try to save it directly or save weights. 
+        # Ideally rely on .keras, but user asked for pkl.
+        try:
+             joblib.dump(model, f"pkls/keras_model_{lieu}.pkl")
+        except Exception as e:
+             print(f"Warning: Could not pickle model for {lieu}: {e}")
 
     print("\n--- FINAL SUMMARY (KERAS) ---")
     for lieu, metrics in results.items():
