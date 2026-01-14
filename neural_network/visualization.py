@@ -9,11 +9,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
 # --- CONFIGURATION ---
-DATA_PATH = "/home/yanis/Documents/projetDataScience/training_matrix_sully.csv"
+DATA_PATH = "../training_matrix_sully.csv"
 TARGETS = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
 INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
-# Models are in tensorflow/ folder relative to this script
-MODEL_DIR = "tensorflow" 
+# Models are in tensorflow/keras/ folder relative to this script
+MODEL_DIR = "tensorflow/keras"
+# Scaler is in tensorflow/pkls/
+SCALER_DIR = "tensorflow/pkls"
 
 def load_data_and_prepare():
     if not os.path.exists(DATA_PATH):
@@ -27,7 +29,7 @@ def load_data_and_prepare():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # Load Scaler
-    scaler_path = os.path.join(MODEL_DIR, "scaler.pkl")
+    scaler_path = os.path.join(SCALER_DIR, "scaler.pkl")
     if not os.path.exists(scaler_path):
         raise FileNotFoundError(f"Scaler not found at {scaler_path}. Please run tensorflow/keras_model.py first.")
         
