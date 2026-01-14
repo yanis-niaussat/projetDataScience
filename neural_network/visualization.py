@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
 # --- CONFIGURATION ---
-DATA_PATH = "/home/yanis/Documents/projetDataScience/boosting/training_matrix_sully.csv"
+DATA_PATH = "/home/yanis/Documents/projetDataScience/training_matrix_sully.csv"
 TARGETS = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
 INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
 # Models are in tensorflow/ folder relative to this script
