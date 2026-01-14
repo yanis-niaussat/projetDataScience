@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import joblib
 
 df = pd.read_csv('training_matrix_sully.csv')
@@ -20,7 +21,10 @@ def model_filename(loc_name: str) -> str:
 X = df[input_cols]
 y = df[target_cols]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
 print("Training Random Forest (Multi-Output)...")
 model = RandomForestRegressor(n_estimators=100, random_state=42)
@@ -29,11 +33,12 @@ model.fit(X_train, y_train)
 joblib.dump(model, 'sully_flood_model_final.pkl')
 print("Model saved as 'sully_flood_model_final.pkl'")
 print(f"Global Accuracy (R²): {model.score(X_test, y_test):.4f}")
+joblib.dump(scaler, 'rf_scaler.pkl')
 
 print("Training and saving per-location models...")
 for loc in target_cols:
     loc_model = RandomForestRegressor(n_estimators=100, random_state=42)
-    loc_model.fit(X, df[loc])
+    loc_model.fit(X_scaled, df[loc])
     fname = model_filename(loc)
     joblib.dump(loc_model, fname)
     print(f"Saved {fname}")
@@ -91,7 +96,7 @@ axes = axes.flatten()
 
 for i, loc in enumerate(target_cols):
     local_model = RandomForestRegressor(n_estimators=50, random_state=42)
-    local_model.fit(X, df[loc])
+    local_model.fit(X_scaled, df[loc])
     
     local_imp = pd.Series(local_model.feature_importances_, index=input_cols).sort_values(ascending=False)
     

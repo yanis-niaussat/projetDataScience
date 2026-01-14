@@ -5,13 +5,16 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge, Lasso, LassoCV
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV
+import joblib
+import matplotlib
+matplotlib.use("Agg")  # Headless backend
 import matplotlib.pyplot as plt
 
 # ========================================
 # CHARGEMENT DES DONNÉES
 # ========================================
 
-df = pd.read_csv('../boosting/training_matrix_sully.csv')
+df = pd.read_csv('training_matrix_sully.csv')
 
 # Variables explicatives : 8 paramètres hydrauliques du système Telemac
 X = df.iloc[:, 0:8]
@@ -20,13 +23,16 @@ feature_names = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
 # Variables à prédire : hauteur d'eau à 4 lieux d'intérêt à Sully
 targets = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
 
-# Division train/test (80/20)
-X_train, X_test = train_test_split(X, test_size=0.2, random_state=42)
+# Division train/test (80/20) synchronisée X et y
+X_train, X_test, y_train_all, y_test_all = train_test_split(
+    X, df[targets], test_size=0.2, random_state=42
+)
 
-# Standardisation des features (important pour Ridge et Lasso)
+# Standardisation des features (important pour Ridge et Lasso) — scaler sauvegardé pour réusage
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
+joblib.dump(scaler, 'ridge_lasso_scaler.pkl')
 
 print("="*80)
 print("PRÉDICTION DES HAUTEURS D'EAU À SULLY - COMPARAISON RIDGE VS LASSO")
@@ -49,8 +55,8 @@ resultats_ridge = {}
 for target in targets:
     print(f"\n--- {target.replace('_', ' ').upper()} ---")
     
-    y = df[target]
-    y_train, y_test = train_test_split(y, test_size=0.2, random_state=42)
+    y_train = y_train_all[target]
+    y_test = y_test_all[target]
     
     # Recherche du λ optimal par validation croisée (K=5)
     ridge = Ridge()
@@ -97,8 +103,8 @@ resultats_lasso = {}
 for target in targets:
     print(f"\n--- {target.replace('_', ' ').upper()} ---")
     
-    y = df[target]
-    y_train, y_test = train_test_split(y, test_size=0.2, random_state=42)
+    y_train = y_train_all[target]
+    y_test = y_test_all[target]
     
     # LassoCV : recherche automatique du λ optimal
     lasso = LassoCV(alphas=lambdas, cv=5, max_iter=10000, random_state=42)
@@ -122,6 +128,14 @@ for target in targets:
         'y_test': y_test,
         'y_pred': y_pred
     }
+
+# Sauvegarde des modèles Ridge/Lasso par lieu (sans fichiers de prédictions)
+for target in targets:
+    ridge_path = f"ridge_{target}.pkl"
+    lasso_path = f"lasso_{target}.pkl"
+    joblib.dump(resultats_ridge[target]['model'], ridge_path)
+    joblib.dump(resultats_lasso[target]['model'], lasso_path)
+    print(f"Saved {ridge_path}, {lasso_path}")
     
     print(f"λ optimal = {lasso.alpha_:.4f}")
     print(f"R² (test) = {R2:.4f}")
