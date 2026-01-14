@@ -19,15 +19,15 @@ def main():
     set_seeds(42)
     
     # --- 1. CONFIGURATION ---
-    DATA_PATH = "../../dataset_final_Sully.csv"
-    TARGETS = ['Parc_Chateau', 'Centre_Sully', 'Gare_Sully', 'Caserne_Pompiers']
+    DATA_PATH = "/home/yanis/Documents/projetDataScience/boosting/training_matrix_sully.csv"
+    TARGETS = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
     INPUT_FEATURES = ['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm']
     
     print("--- STARTING TENSORFLOW/KERAS FLOOD PREDICTION ---")
     
     # --- 2. DATA LOADING ---
-    if not os.path.exists(DATA_PATH):
-        raise FileNotFoundError(f"Dataset not found at {DATA_PATH}. Please run matrixBuilder.py first.")
+    # if not os.path.exists(DATA_PATH):
+        # raise FileNotFoundError(f"Dataset not found at {DATA_PATH}. Please run matrixBuilder.py first.")
         
     print(f"Loading data from {DATA_PATH}...")
     df = pd.read_csv(DATA_PATH)
@@ -43,6 +43,10 @@ def main():
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
+    
+    # Save Scaler for visualization
+    joblib.dump(scaler, "scaler.pkl")
+    print("Scaler saved to scaler.pkl")
     
     # --- 4. MODELING LOOP ---
     results = {}
@@ -77,14 +81,14 @@ def main():
         history = model.fit(
             X_train_scaled, y_train_col,
             validation_split=0.1, # Use 10% of train for validation (similar to sklearn's validation_fraction)
-            epochs=200,           # Sufficient epochs
+            epochs=300,           # Sufficient epochs
             batch_size=32,
             callbacks=[early_stopping],
-            verbose=0             # Silent training
+            verbose=1           # Silent training
         )
         
         # --- 5. EVALUATION ---
-        y_pred = model.predict(X_test_scaled, verbose=0).flatten()
+        y_pred = model.predict(X_test_scaled, verbose=1).flatten()
         
         r2 = r2_score(y_test_col, y_pred)
         rmse = np.sqrt(mean_squared_error(y_test_col, y_pred))
