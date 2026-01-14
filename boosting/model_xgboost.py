@@ -62,6 +62,8 @@ for lieu in targets:
     
     # Sauvegarde du modèle .pkl au même endroit
     joblib.dump(model, f"xgboost_{lieu}.pkl")
+    joblib.dump(scaler, "scaler.pkl")
+    print("✅ Scaler sauvegardé sous 'scaler.pkl'")
 
 # --- 4. ANALYSE ET SAUVEGARDE DES GRAPHIQUES ---
 print("\n--- GÉNÉRATION ET SAUVEGARDE DES GRAPHIQUES ---")
