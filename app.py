@@ -3,166 +3,242 @@ import pandas as pd
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from pathlib import Path
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Simulateur Inondation Sully", page_icon="🌊", layout="wide")
-st.title("🌊 Prédiction de Crue - Sully-sur-Loire")
+st.set_page_config(page_title="FloodRisk: Sully-sur-Loire", page_icon="🌊", layout="wide")
 
-# --- CHARGEMENT DES ASSETS ---
+# --- CUSTOM CSS FOR PRESENTATION MODE ---
+st.markdown("""
+<style>
+    .metric-container {background-color: #f0f2f6; padding: 10px; border-radius: 10px;}
+    .stAlert {padding: 0.5rem;}
+</style>
+""", unsafe_allow_html=True)
+
+# --- 1. LOADING ASSETS ---
 @st.cache_resource
-def load_assets():
+def load_models_and_scaler():
+    base_path = Path("boosting") # Ensure this matches your folder structure
+    
     targets = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
     models = {}
-    base_dir = Path(__file__).parent
     
-    # Adapte le chemin selon ton dossier réel
-    models_dir = base_dir / "boosting" 
-
-    for t in targets:
-        # Chargement des modèles XGBoost
-        model_path = models_dir / f"xgboost_{t}.pkl"
-        if model_path.exists():
-            models[t] = joblib.load(str(model_path))
-        else:
-            st.error(f"Modèle introuvable : {model_path}")
-            return None, None, None
-
-    # Chargement du Scaler
-    scaler_path = models_dir / "scaler.pkl"
-    if scaler_path.exists():
-        scaler = joblib.load(str(scaler_path))
-    else:
-        st.error("Scaler introuvable")
+    # Try loading XGBoost models (fallback to others if needed)
+    try:
+        scaler = joblib.load(base_path / "scaler.pkl")
+        for t in targets:
+            models[t] = joblib.load(base_path / f"xgboost_{t}.pkl")
+    except Exception as e:
+        st.error(f"Error loading models: {e}")
         return None, None, None
-        
+
     return models, scaler, targets
 
-models, scaler, targets = load_assets()
+# --- 1. CHARGEMENT MULTI-MODÈLES ---
+@st.cache_resource
+def load_all_models():
+    # Chemins basés sur ton repo
+    paths = {
+        "XGBoost": Path("boosting"),
+        "RandomForest": Path("randomforest/pickels"),  # Attention au dossier "pickels" vs "pickles"
+        "Ridge": Path("modele_Ridge") # Si tu as exporté ces modèles
+    }
+    
+    targets = ['parc_chateau', 'centre_sully', 'gare_sully', 'caserne_pompiers']
+    model_store = {t: {} for t in targets} # Structure: {'parc_chateau': {'XGBoost': model, 'RF': model...}}
+    
+    # Charger le Scaler (nécessaire pour Ridge/Lasso/NeuralNet, pas pour RF/XGB en théorie mais utile si standardisé)
+    scaler = joblib.load(paths["XGBoost"] / "scaler.pkl")
 
-if not models:
-    st.stop()
+    # Charger XGBoost
+    for t in targets:
+        try:
+            model_store[t]["XGBoost"] = joblib.load(paths["XGBoost"] / f"xgboost_{t}.pkl")
+        except: pass
 
-# --- SIDEBAR : PARAMÈTRES HYDRAULIQUES ---
-st.sidebar.header("⚙️ Paramètres de la Crue")
+    # Charger Random Forest (Adapter les noms de fichiers si nécessaire, ex: RF_CasernePompiers.pkl)
+    rf_names = {
+        'parc_chateau': 'RF_ParcChateau.pkl',
+        'centre_sully': 'RF_CentreSully.pkl',
+        'gare_sully': 'RF_GareSully.pkl',
+        'caserne_pompiers': 'RF_CasernePompiers.pkl'
+    }
+    for t, filename in rf_names.items():
+        try:
+            model_store[t]["Random Forest"] = joblib.load(paths["RandomForest"] / filename)
+        except: pass
 
-# Tooltips pour expliquer les variables physiques
-qmax = st.sidebar.slider("Débit de pointe (Qmax)", 3000.0, 25000.0, 5500.0, step=100.0, help="Débit maximum du fleuve en m3/s")
-tm = st.sidebar.slider("Durée Montée (tm)", 2000.0, 25000.0, 14000.0, help="Vitesse à laquelle la crue arrive")
-st.sidebar.markdown("---")
-st.sidebar.subheader("Rugosité (Frottement)")
-ks_fp = st.sidebar.slider("Lit Majeur (Ks_fp)", 5.0, 20.0, 15.0, help="Végétation dans la plaine inondable (plus bas = plus dense)")
-ks2 = st.sidebar.slider("Zone 2 (Ks2)", 18.0, 38.0, 28.0)
-ks3 = st.sidebar.slider("Zone 3 (Ks3)", 27.0, 47.0, 37.0)
-ks4 = st.sidebar.slider("Zone 4 (Ks4)", 18.0, 38.0, 28.0)
-er = st.sidebar.slider("Érosion (er)", 0.0, 1.0, 0.5)
-of = st.sidebar.slider("Facteur Ouvrage (of)", -0.2, 0.2, 0.0)
+    return model_store, scaler, targets
 
-# Dataframe pour la prédiction
-data = {
-    'er': er, 'ks2': ks2, 'ks3': ks3, 'ks4': ks4, 
-    'ks_fp': ks_fp, 'of': of, 'qmax': qmax, 'tm': tm
+models, scaler, targets = load_models_and_scaler()
+model_store, scaler, targets = load_all_models()
+
+# Mock Coordinates for the Map (Approximate for Sully-sur-Loire POIs)
+poi_coords = {
+    'parc_chateau': [47.7668, 2.3780],
+    'centre_sully': [47.7680, 2.3750],
+    'gare_sully': [47.7620, 2.3800],
+    'caserne_pompiers': [47.7650, 2.3700]
 }
-input_df = pd.DataFrame(data, index=[0])
+
+# --- SIDEBAR: SIMULATION CONTROL ---
+st.sidebar.header("🎛️ Control Panel")
+st.sidebar.caption("Adjust hydraulic parameters to simulate a flood event.")
+
+# Grouping inputs logically
+with st.sidebar.expander("💧 Hydraulics (River)", expanded=True):
+    qmax = st.slider("Qmax (Flow Rate m3/s)", 3000, 10000, 5500, step=100, help="Peak flow rate of the Loire river.")
+    tm = st.slider("Tm (Duration s)", 20000, 60000, 43000)
+
+with st.sidebar.expander("🌳 Topography (Roughness)", expanded=False):
+    ks_fp = st.slider("Ks Flood Plain (Vegetation)", 10, 60, 30, help="Lower value = Denser vegetation = More friction")
+    ks2 = st.slider("Ks Zone 2", 10, 60, 30)
+    ks3 = st.slider("Ks Zone 3", 10, 60, 30)
+    ks4 = st.slider("Ks Zone 4", 10, 60, 30)
+    er = st.slider("Erosion Coeff", 0.0, 1.0, 0.5)
+    of = st.slider("Obstacle Factor", -0.5, 0.5, 0.0)
+
+# Prepare Input Vector
+input_data = pd.DataFrame([[er, ks2, ks3, ks4, ks_fp, of, qmax, tm]], 
+                          columns=['er', 'ks2', 'ks3', 'ks4', 'ks_fp', 'of', 'qmax', 'tm'])
+
+# --- SIDEBAR ---
+st.sidebar.header("🧠 Moteur de Prédiction")
+model_choice = st.sidebar.selectbox(
+    "Choisir le modèle :",
+    ["Ensemble (Moyenne)", "XGBoost", "Random Forest"],
+    help="L'ensemble fait la moyenne des modèles pour plus de robustesse."
+)
 
 # --- PRÉDICTIONS ---
-input_scaled = scaler.transform(input_df)
-input_scaled_df = pd.DataFrame(input_scaled, columns=input_df.columns)
+preds = {}
 
-results = {}
+# On prépare les données (Scaled pour certains, Raw pour d'autres si besoin, ici on simplifie avec scaled partout si entraîné ainsi)
+input_scaled = scaler.transform(input_data)
+input_scaled_df = pd.DataFrame(input_scaled, columns=input_data.columns)
+
 for t in targets:
-    pred = models[t].predict(input_scaled_df)[0]
-    results[t] = max(0.0, pred)
-
-# --- AFFICHAGE PRINCIPAL (TABS) ---
-tab1, tab2 = st.tabs(["📊 Tableau de Bord", "🧠 Analyse & Sensibilité"])
-
-with tab1:
-    # --- INDICATEURS CLÉS (KPI) ---
-    st.markdown("### 🚨 Statut des Zones Critiques")
-    cols = st.columns(4)
-    for i, t in enumerate(targets):
-        val = results[t]
-        label = t.replace("_", " ").title()
+    models_available = model_store[t]
+    
+    if model_choice == "Ensemble (Moyenne)":
+        # Moyenne de tous les modèles chargés pour ce lieu
+        val_xgb = models_available.get("XGBoost").predict(input_scaled_df)[0] if "XGBoost" in models_available else 0
+        val_rf = models_available.get("Random Forest").predict(input_data)[0] if "Random Forest" in models_available else 0
+        val = (val_xgb + val_rf) / 2
         
-        with cols[i]:
-            if val < 0.05:
-                st.metric(label=label, value=f"{val:.2f} m", delta="Sec", delta_color="normal")
-            elif val < 0.50: # Seuil ajusté pour l'exemple
-                st.metric(label=label, value=f"{val:.2f} m", delta="Risque Faible", delta_color="off")
-            else:
-                st.metric(label=label, value=f"{val:.2f} m", delta="Inondation", delta_color="inverse")
+    elif model_choice == "XGBoost":
+        val = models_available["XGBoost"].predict(input_scaled_df)[0]
+        
+    elif model_choice == "Random Forest":
+        val = models_available["Random Forest"].predict(input_data)[0]
 
-    # --- GRAPHIQUE BARRES ---
-    st.markdown("### Comparaison des Hauteurs d'eau")
-    fig, ax = plt.subplots(figsize=(10, 4))
-    labels_plot = [t.replace("_", "\n").title() for t in targets]
-    colors = ['#2a9d8f' if val < 0.5 else '#e76f51' for val in results.values()]
-    
-    bars = ax.bar(labels_plot, results.values(), color=colors)
-    ax.set_ylabel("Hauteur d'eau (m)")
-    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label="Seuil Vigilance") # Ligne de seuil
-    ax.legend()
-    
-    # Annotations
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2, height + 0.05, f"{height:.2f}m", ha='center', va='bottom', fontweight='bold')
-    
-    st.pyplot(fig)
+    preds[t] = max(0.0, val)
 
-with tab2:
-    st.markdown("### 📈 Analyse de Sensibilité (Focus Qmax)")
-    st.info("Ce graphique montre comment la hauteur d'eau évoluerait si le débit (Qmax) augmentait, toutes choses égales par ailleurs.")
-    
-    # --- CALCUL DE LA COURBE DE SENSIBILITÉ ---
-    # On génère une plage de Qmax de 3000 à 10000
-    q_range = np.linspace(3000, 10000, 50)
-    
-    # On crée une matrice où tout est fixe sauf Qmax
-    temp_df = pd.concat([input_df]*50, ignore_index=True)
-    temp_df['qmax'] = q_range
-    
-    # On scale
-    temp_scaled = scaler.transform(temp_df)
-    temp_scaled_df = pd.DataFrame(temp_scaled, columns=input_df.columns)
-    
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
-    
-    for t in targets:
-        preds = models[t].predict(temp_scaled_df)
-        # On force à 0 si négatif
-        preds = [max(0, p) for p in preds]
-        ax2.plot(q_range, preds, label=t.replace("_", " ").title())
-    
-    # Point actuel
-    ax2.axvline(x=qmax, color='red', linestyle='--', label=f"Simulation actuelle ({qmax} m3/s)")
-    
-    ax2.set_xlabel("Débit Qmax (m3/s)")
-    ax2.set_ylabel("Hauteur d'eau prédite (m)")
-    ax2.set_title("Réponse des zones inondables face à la montée du débit")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    st.pyplot(fig2)
+# --- MAIN DASHBOARD ---
+st.title("🌊 Smart Flood Defense: Sully-sur-Loire")
+st.markdown("### Real-time Impact Assessment")
 
-    # --- IMPORTANCE DES VARIABLES (STATIC) ---
-    st.markdown("### 🧬 Quels facteurs influencent le plus chaque zone ?")
-    st.write("Basé sur l'entraînement XGBoost (Graphiques générés par `model_xgboost.py`)")
+# TAB STRUCTURE
+tab1, tab2, tab3 = st.tabs(["🚀 Simulation & Map", "📈 Sensitivity Analysis", "🧠 Model Transparency"])
+
+# --- TAB 1: SIMULATION ---
+with tab1:
+    # 1. KPI Metrics Row
+    cols = st.columns(4)
+    map_data = []
     
-    col_img1, col_img2 = st.columns(2)
-    
-    # Affichage des images si elles existent
-    # Assurez-vous que les images sont dans le dossier racine ou boosting
-    import os
     for i, t in enumerate(targets):
-        # Chemin hypothétique, à adapter
-        img_path = f"importance_{t}.png" 
-        if os.path.exists(img_path):
-            if i % 2 == 0:
-                col_img1.image(img_path, caption=f"Importance - {t}", use_column_width=True)
-            else:
-                col_img2.image(img_path, caption=f"Importance - {t}", use_column_width=True)
-        else:
-            # Fallback text if image missing
-            pass
+        level = preds[t]
+        name = t.replace("_", " ").title()
+        
+        # Color Logic
+        if level < 0.1: status, color = "Safe", "normal"
+        elif level < 1.0: status, color = "Warning", "off"
+        else: status, color = "CRITICAL", "inverse"
+
+        with cols[i]:
+            st.metric(label=name, value=f"{level:.2f} m", delta=status, delta_color=color)
+        
+        # Prepare data for map
+        map_data.append({
+            "name": name,
+            "lat": poi_coords[t][0],
+            "lon": poi_coords[t][1],
+            "water_level": level,
+            "size": (level + 0.5) * 100, # Bubble size based on flood
+            "color": [255, 0, 0, 200] if level > 1.0 else [0, 255, 0, 150]
+        })
+
+    st.markdown("---")
+    
+    # 2. Map & Chart Split
+    c1, c2 = st.columns([3, 2])
+    
+    with c1:
+        st.subheader("📍 Impact Map")
+        df_map = pd.DataFrame(map_data)
+        st.map(df_map, latitude="lat", longitude="lon", size="size", zoom=13)
+
+    with c2:
+        st.subheader("📊 Comparative Levels")
+        # Bar Chart
+        fig, ax = plt.subplots(figsize=(5,4))
+        colors = ['green' if x < 1.0 else 'red' for x in preds.values()]
+        ax.bar(list(preds.keys()), list(preds.values()), color=colors)
+        ax.set_ylabel("Water Level (m)")
+        ax.set_xticklabels([t.replace("_", "\n").title() for t in targets], rotation=45)
+        st.pyplot(fig)
+
+# --- TAB 2: SENSITIVITY (DYNAMICS) ---
+with tab2:
+    st.subheader("📉 How does Flow Rate (Qmax) impact flooding?")
+    st.write("This simulation holds all parameters constant (vegetation, topography) and only varies the River Flow.")
+    
+    # Create the curve data
+    q_range = np.linspace(3000, 12000, 50)
+    sensitivity_data = []
+    
+    # Repeat the current user input 50 times
+    temp_df = pd.concat([input_data]*50, ignore_index=True)
+    temp_df['qmax'] = q_range # Overwrite Qmax column
+    
+    # Scale
+    temp_scaled = scaler.transform(temp_df)
+    temp_scaled_df = pd.DataFrame(temp_scaled, columns=input_data.columns)
+    
+    # Predict for all targets
+    chart_data = pd.DataFrame(index=q_range)
+    for t in targets:
+        p = models[t].predict(temp_scaled_df)
+        chart_data[t] = np.maximum(p, 0)
+        
+    st.line_chart(chart_data)
+    st.caption(f"Current Simulation Point: Qmax = {qmax} m3/s")
+
+# --- TAB 3: MODEL TRANSPARENCY (THE WHY) ---
+with tab3:
+    st.header("🔍 Model Interpretation & Checking")
+    
+    st.markdown("### 1. Quels facteurs influencent la crue ?")
+    st.info("Comparaison de ce que les modèles 'regardent' pour faire leur prédiction.")
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write("**Vision Globale (Random Forest)**")
+        st.image("randomforest/graphs/graph1_global_importance.png", use_column_width=True)
+    with c2:
+        st.write("**Vision Locale (XGBoost - Parc Château)**")
+        st.image("boosting/importance_parc_chateau.png", use_column_width=True)
+
+    st.markdown("### 2. Fiabilité des modèles")
+    st.write("Performance sur les données de test (Graphiques générés par l'équipe)")
+    
+    lieu_valid = st.select_slider("Choisir un lieu pour voir la précision :", options=targets)
+    
+    img_path = f"neural_network/plots/{lieu_valid}/actual_vs_predicted.png"
+    if os.path.exists(img_path):
+        st.image(img_path, caption=f"Prédiction vs Réalité ({lieu_valid})")
+    else:
+        st.warning("Graphique de validation manquant pour ce lieu.")
